@@ -1,0 +1,185 @@
+
+
+NOTE: 1 Find all movie-names that have the word "Car" as the first word in the name.
+SELECT name FROM movies WHERE name LIKE "Car %";
+
+NOTE: 2 Find all movies made in the year you were born.
+SELECT * FROM movies WHERE year=1991;
+
+NOTE: 3 How many movies does our dataset have for the year 1982?
+SELECT COUNT(*) FROM movies WHERE year=1982;
+
+NOTE: 4 Find actors who have "stack" in their last name.
+SELECT first_name, last_name from actors WHERE last_name LIKE '%stack%';
+
+NOTE: 5 We all want our kids to be actors (...right), so what's the best first
+name and last name to give them? What are the 10 most popular first names
+and last names in the business? And how many actors have each given first or
+last name? This can be multiple queries
+SELECT first_name, count(*) as nameCount FROM actors GROUP BY first_name ORDER BY nameCount DESC LIMIT 10;
+SELECT last_name, count(*) as nameCount FROM actors GROUP BY last_name ORDER BY nameCount DESC LIMIT 10;
+
+NOTE: 6 List the top 100 most active actors and the number of roles they have starred in.
+SELECT actors.first_name, actors.last_name, count(*) as roleCount
+   FROM actors JOIN roles
+   WHERE actors.id = roles.actor_id
+   GROUP BY actors.id
+   ORDER BY roleCount DESC
+   LIMIT 100;
+
+NOTE: 7 How many movies does IMDB have of each genre, ordered by least popular genre?
+HINT:
+genre         num_movies
+------------  ---------------
+Film-Noir     417
+War           4436
+Mystery       4971...
+
+SELECT movies_genres.genre, count(*) as numMovies
+FROM movies_genres
+GROUP BY genre
+ORDER BY numMovies;
+
+NOTE: 8 List the first and last names of all the actors who played
+in the 1995 movie 'Braveheart', arranged alphabetically by last name.
+SELECT actors.first_name, actors.last_name
+FROM actors JOIN movies JOIN roles
+WHERE movies.name='Braveheart' AND actors.id=roles.actor_id AND movies.id=roles.movie_id
+ORDER BY actors.last_name;
+
+NOTE: 9 List all the directors who directed a 'Film-Noir'-genre movie in a leap year
+(for the sake of this challenge, pretend that all years divisible by 4 are leap
+years — which is not true in real life). Your query should return director name,
+the movie name, and the year, sorted by movie name.
+
+SELECT directors.first_name, directors.last_name, movies.name, movies.year
+FROM directors JOIN movies_genres JOIN movies JOIN movies_directors
+WHERE movies.year%4=0
+AND movies_genres.genre = 'Film-Noir'
+AND movies.id=movies_genres.movie_id
+AND directors.id=movies_directors.director_id
+AND movies_directors.movie_id=movies.id
+ORDER BY movies.name;
+
+
+NOTE: 10 List all the actors that have worked with Kevin Bacon in Drama movies
+(include the movie name). Please exclude Mr. Bacon himself from the results.
+
+SELECT actors.first_name, actors.last_name
+FROM (
+  SELECT roles.movie_id as baconMovies
+  FROM actors JOIN roles JOIN movies_genres
+  WHERE actors.id = roles.actor_id
+  AND actors.first_name = 'Kevin'
+  AND actors.last_name = 'Bacon'
+  AND movies_genres.genre = 'Drama'
+  GROUP BY roles.movie_id
+)
+JOIN actors
+JOIN roles
+WHERE actors.id = roles.actor_id
+AND actors.first_name != 'Kevin'
+AND actors.last_name != 'Bacon'
+AND baconMovies = roles.movie_id
+GROUP BY actors.id
+ORDER BY actors.last_name;
+
+NOTE: 11 Which actors have acted in a film before 1900 and also in a film after 2000?
+NOTE: we are not asking you for all the pre-1900 and post-2000 actors —
+we are asking for each actor who worked in both eras!
+
+**BROKEN**
+SELECT actors.first_name, actors.last_name
+FROM
+  (
+    SELECT movies.id AS id
+    FROM movies
+    WHERE movies.year < 1900
+    )AS pre1900movies
+  JOIN (
+    SELECT movies.id AS id
+    FROM movies
+    WHERE movies.year > 2000
+  ) AS post2000movies
+  JOIN roles
+  JOIN actors
+WHERE roles.movie_id = pre1900movies.id
+  AND roles.movie_id = post2000movies.id
+  AND roles.actor_id = actors.id;
+**ENDBROKEN**
+
+
+SELECT actors.first_name, actors.last_name
+FROM
+  (
+  SELECT roles.actor_id AS actor_id
+  FROM roles JOIN movies
+  WHERE roles.movie_id = movies.id
+  AND movies.year < 1900
+
+  INTERSECT
+
+  SELECT roles.actor_id
+  FROM roles JOIN movies
+  WHERE roles.movie_id = movies.id
+  AND movies.year > 2000
+  ) AS ids
+  JOIN actors
+WHERE actors.id = ids.actor_id;
+
+NOTE: 12 Find actors that played five or more roles in the same movie after the year 1990.
+Notice that ROLES may have occasional duplicates, but we are not interested in these:
+ we want actors that had five or more distinct (cough cough) roles in the same movie.
+ Write a query that returns the actors' names, the movie name, and the number of
+ distinct roles that they played in that movie (which will be ≥ 5).
+
+SELECT actors.first_name, actors.last_name, movies.name as movie, movies.year,
+  COUNT (DISTINCT roles.role) AS numberRoles
+FROM actors
+  INNER JOIN roles ON actors.id=roles.actor_id
+  INNER JOIN movies ON roles.movie_id = movies.id
+WHERE movies.year > 1990
+GROUP BY roles.actor_id, roles.movie_id
+HAVING numberRoles > 4;
+
+
+NOTE: 13 For each year, count the number of movies in that year that had only female actors.
+You might start by including movies with no cast, but your ultimate goal is to narrow
+your query to only movies that have a cast.
+
+# includes movies with no actors
+SELECT m.year, COUNT(*) femaleOnly
+FROM movies m
+WHERE not exists (
+  SELECT *
+  FROM roles r, actors a
+  WHERE a.id = r.actor_id
+    AND r.movie_id = m.id
+    AND a.gender = 'M'
+)
+GROUP BY m.year;
+
+# includes movies with no actors
+SELECT year, COUNT(*)
+FROM movies
+WHERE id NOT IN (
+  SELECT movie_id
+  FROM roles r, actors a
+  WHERE gender = 'M'
+  AND a.id = actor_id
+)
+
+# excludes movies with no actors
+SELECT m.year, count(*) femaleOnly
+FROM movies m
+WHERE NOT EXISTS (SELECT *
+  FROM roles AS ma, actors AS a
+  WHERE a.id = ma.actor_id
+    AND ma.movie_id = m.id
+    AND a.gender = 'M')
+AND EXISTS (SELECT *
+  FROM roles AS ma, actors AS a
+  WHERE a.id = ma.actor_id
+    AND ma.movie_id = m.id
+    AND a.gender = 'F')
+GROUP BY m.year;
